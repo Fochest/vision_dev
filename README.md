@@ -55,6 +55,13 @@ Provided, is the sloth configuration file, `robosub_config.py`, to specialize sl
 - ### sloth_to_tfrecord.py
    Converts json format files into tenserflow format.
    - #### Usage
-      `./sloth_to_tfrecord.py <config_file> <output directory>`
-      - filename: [string] The filepath to the *.json file from which to extract information.
-      - output directory: [string] The directory into which the darknet compatible annotation files are output.
+      `./sloth_to_tfrecord.py <config_file> <output directory> --crossvalidation <crossvalidation-iterations> --test <testratio> --evaluation <evaluationratio>`
+      - input [STRING]: labelgroup from LabelService or json-file ending in .json
+         - .json for offline-usage
+      - outputdir [STRING]: folder in which the tfrecord files will be written + labelMap
+      - crossvalidation [INT] (default 1): determines amounts of training- & test-datasets that will be generated using the crossvalidation algorithm
+         - eg: 10 -> evaluationratio is substracted from all files - the remaining are used to create X sets. Has higher priority than the testratio parameter. crossvalidation == 1 -> data is split into [trainingset / testset / validationset] according to testratio & evaluationratio 
+      - testratio [FLOAT] (default 0.1): determines the ratio of files will be used as a test record
+         - eg: 0.1 -> 10% of the labelled files will be written to test.tfrecord
+      - evaluationratio [FLOAT] (default 0.2): determines the ratio of files will be used as an evaluation record
+         - eg: 0.1 -> 10% of the labelled files will be written to eval.tfrecord
