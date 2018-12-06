@@ -232,7 +232,8 @@ def clean_dataset(l):
     return tmplist, skipped
 
 def _main(args):
-    """Locate files for train and test sets and then generate TFRecords."""
+    """Locate files for train, test and evaluation sets and then generate TFRecords."""
+    """When crossvalidation is specified, it substracts evaluation-rate * SUM(all images) and uses the remaining images to create N training/test sets"""
     input_path = args.input
     """When the file is named foobar.service it tries to read the json representation from a REST resource called ${SERVICEURL}/foobar/file"""
     if not ((input_path.endswith(".json")) or (input_path.endswith(".service"))):
