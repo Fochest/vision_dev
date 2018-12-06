@@ -234,9 +234,10 @@ def clean_dataset(l):
 def _main(args):
     """Locate files for train and test sets and then generate TFRecords."""
     input_path = args.input
-    if not ((input_path.endswith(".json")) or  (input_path.endswith(".service"))):
+    """When the file is named foobar.service it tries to read the json representation from a REST resource called ${SERVICEURL}/foobar/file"""
+    if not ((input_path.endswith(".json")) or (input_path.endswith(".service"))):
+        """Replace this URL placeholder with the REST resource of your service, if you need it at all"""
         url = 'http://${SERVICE.URL}/' +input_path +'/file'
-        print(url)
         headers = {'Accept': 'application/json'}
         response = requests.get(url, headers=headers)
         data = response.json()
