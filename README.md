@@ -61,7 +61,7 @@ Provided, is the sloth configuration file, `robosub_config.py`, to specialize sl
       - outputdir [STRING]: folder in which the tfrecord files will be written + labelMap
       - crossvalidation [INT] (default 1): determines amounts of training- & test-datasets that will be generated using the crossvalidation algorithm
          - eg: 10 -> evaluationratio is substracted from all files - the remaining are used to create X sets. Has higher priority than the testratio parameter. crossvalidation == 1 -> data is split into [trainingset / testset / validationset] according to testratio & evaluationratio 
-      - testratio [FLOAT] (default 0.1): determines the ratio of files will be used as a test record
+      - testratio [FLOAT] (default 0.1): determines the ratio of files will be used as a test record. Will be ignored when crossvalidation parameter is greater than 1
          - eg: 0.1 -> 10% of the labelled files will be written to test.tfrecord
       - evaluationratio [FLOAT] (default 0.2): determines the ratio of files will be used as an evaluation record
          - eg: 0.1 -> 10% of the labelled files will be written to eval.tfrecord
