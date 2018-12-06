@@ -17,7 +17,9 @@ import random
 
 import numpy as np
 import json
+import requests
 from object_detection.utils import dataset_util
+from shutil import copy
 
 import argparse
 
@@ -26,12 +28,18 @@ parser = argparse.ArgumentParser(
     formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
 parser.add_argument('input',
-    help='input json file')
+    help='input json file or labelgroup')
 parser.add_argument('outdir',
     help='directory to place output files')
+parser.add_argument('--crossvalidation', type=int,
+    help = "(1-15), amounts of crossvalidation training- & test-sets to be created. Has higher priority than the --test parameter",
+    default=1)
 parser.add_argument('--test', type=float,
     help = "(0-1), portion of dataset to use for testing",
     default=0.1)
+parser.add_argument('--evaluation', type=float,
+    help = "(0-1), portion of dataset to use for evaluation",
+    default=0.2)
 args = parser.parse_args()
 
 import tensorflow as tf
@@ -187,9 +195,9 @@ def create_record(outfile, json_data, classes, input_path, progress):
         progress.next()
 
         # Skip files marked as bad
-        if str(item["status"]) != "Good":
-            skipped_not_good += 1
-            continue
+        #if str(item["status"]) != "Good":
+        #    skipped_not_good += 1
+        #    continue
 
         filepath = os.path.join(input_path, str(item['filename']))
         filename = os.path.basename(filepath)
@@ -216,8 +224,7 @@ def clean_dataset(l):
     skipped = 0
 
     for entry in l:
-        if str(entry["status"]) == "Good" and \
-           len(entry['annotations']) > 0:
+        if len(entry['annotations']) > 0:
            tmplist.append(entry)
         else:
             skipped += 1
@@ -227,14 +234,26 @@ def clean_dataset(l):
 def _main(args):
     """Locate files for train and test sets and then generate TFRecords."""
     input_path = args.input
+    if not ((input_path.endswith(".json")) or  (input_path.endswith(".service"))):
+        url = 'http://${SERVICE.URL}/' +input_path +'/file'
+        print(url)
+        headers = {'Accept': 'application/json'}
+        response = requests.get(url, headers=headers)
+        data = response.json()
+        f = open(input_path+".json", "w")
+        f.write(json.dumps(data, sort_keys=True, indent=4, separators=(',', ': ')))
+        f.write("\n")
+        f.flush()
+        f.close
+        input_path = input_path+".json"
+
     input_path = os.path.expanduser(input_path)
     output_path = args.outdir
 
-    train_path = os.path.join(output_path, 'train.record')
-    test_path = os.path.join(output_path, 'test.record')
+    eval_path = os.path.join(output_path, 'eval.record')
     label_path = os.path.join(output_path, 'label_map.pbtxt')
 
-    json_data = json.load(open(args.input, 'r'))
+    json_data = json.load(open(input_path, 'r'))
     json_data, skipped = clean_dataset(json_data)
 
     classes =  find_classes(json_data)
@@ -248,34 +267,59 @@ def _main(args):
 
     # shuffle our data, split into training and testing segments
     random.shuffle(json_data)
-    split_index = int(len(json_data)*(1.0 - args.test))
-    training_data = json_data[0 : split_index]
-    testing_data = json_data[split_index:]
+    split_index_validation = int(len(json_data)*(1.0 - args.evaluation))
+    amount_testing = int(len(json_data) * args.test) 
+    crossvalidation_data = json_data[0 : split_index_validation]
+    
+    if args.crossvalidation > 1:
+        amount_testing = int(len(crossvalidation_data) / args.crossvalidation)
+    
+    evaluation_data = json_data[split_index_validation :] 
 
-    # Create the training data
-    progress = Bar('Creating training data', max=len(training_data),
-            suffix='%(percent)d%%')
-    processed1, skipped_not_good1, skipped_not_found1 = \
-        create_record(train_path, training_data, classes,
-                os.path.dirname(input_path), progress)
-    progress.finish()
-    print "{} images saved to {}.".format(len(training_data), train_path)
-
-    # Create the testing data
-    progress = Bar('Creating testing data ', max=len(testing_data),
+    # Create the evaluation data
+    progress = Bar('Creating evaluation data ', max=len(evaluation_data),
             suffix='%(percent)d%%')
     processed2, skipped_not_good2, skipped_not_found2 = \
-    create_record(test_path, testing_data, classes,
+    create_record(eval_path, evaluation_data, classes,
             os.path.dirname(input_path), progress)
     progress.finish()
-    print "{} images saved to {}.".format(len(testing_data), test_path)
+    print "{} images saved to {}.".format(len(evaluation_data), eval_path)
 
-    # Print some file statistics
-    print "{} images successfuly processed".format(processed1+processed2)
-    print "{} images skipped for not being marked good".format(
-            skipped_not_good1+skipped_not_good2)
-    print "{} images skipped".format(skipped)
-    print "{} images not found".format(skipped_not_found1+skipped_not_found2)
+    for i in range(args.crossvalidation):
+        training_data1 = crossvalidation_data[0 : (i)*amount_testing]
+        testing_data = crossvalidation_data[i*amount_testing : (i+1)*amount_testing]
+        training_data2 = crossvalidation_data[(i+1)*amount_testing : ]
+        training_data = training_data1 + training_data2
+        train_path = os.path.join(output_path, 'train'+str(i)+'.record')
+        test_path = os.path.join(output_path, 'test'+str(i)+'.record')
+        print "Creating crossvalidation records No. {} of {}.".format(i+1, args.crossvalidation)
+        # Create the training data
+        progress = Bar('Creating training data', max=len(training_data),
+                suffix='%(percent)d%%')
+        processed1, skipped_not_good1, skipped_not_found1 = \
+            create_record(train_path, training_data, classes,
+                    os.path.dirname(input_path), progress)
+        progress.finish()
+        print "{} images saved to {}.".format(len(training_data), train_path)
+
+        # Create the testing data
+        progress = Bar('Creating testing data ', max=len(testing_data),
+                suffix='%(percent)d%%')
+        processed3, skipped_not_good3, skipped_not_found3 = \
+        create_record(test_path, testing_data, classes,
+                os.path.dirname(input_path), progress)
+        progress.finish()
+        copy(input_path, output_path)
+        print "{} images saved to {}.".format(len(testing_data), test_path)
+
+        # Print some file statistics
+        print "{} images successfuly processed".format(processed1+processed2+processed3)
+        print "{} images skipped for not being marked good".format(
+                skipped_not_good1+skipped_not_good2+skipped_not_good3)
+        print "{} images skipped".format(skipped)
+        print "{} images not found".format(skipped_not_found1+skipped_not_found2+skipped_not_found3)
+    print "{} images successfuly processed as validation set.".format(len(evaluation_data))
 
 if __name__ == '__main__':
         _main(args)
+        
